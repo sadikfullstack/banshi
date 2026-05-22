@@ -1,0 +1,26 @@
+export type UUID = string;
+export type Timestamp = string;
+
+export type RiskLevel = 'Healthy' | 'Watch' | 'Risk' | 'Critical';
+
+export interface Client {
+  id: UUID;
+  user_id: UUID;
+  name: string;
+  platform: string;
+  account_id: string;
+  notes?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface RiskStatus {
+  id: UUID;
+  client_id: UUID;
+  status: RiskLevel;
+  score: number;
+  notes?: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}

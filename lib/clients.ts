@@ -1,0 +1,82 @@
+import supabase from './supabase'
+import type { Client as DBClient } from '../types/client'
+
+type Result<T> = { data?: T; error?: Error }
+
+export type NewClientPayload = {
+  client_name: string
+  platform: 'Meta' | 'IG'
+  account_id: string
+  notes?: string
+}
+
+async function getUserId(): Promise<Result<string>> {
+  const { data, error } = await supabase.auth.getUser()
+  if (error) return { error }
+  const user = data?.user
+  if (!user) return { error: new Error('Not authenticated') }
+  return { data: user.id }
+}
+
+export async function createClient(payload: NewClientPayload): Promise<Result<DBClient>> {
+  const uid = await getUserId()
+  if (uid.error) return { error: uid.error }
+
+  const insert = {
+    user_id: uid.data,
+    name: payload.client_name,
+    platform: payload.platform,
+    account_id: payload.account_id,
+    notes: payload.notes ?? null,
+  }
+
+  const { data, error } = await supabase.from('clients').insert(insert).select().single()
+  if (error) return { error }
+  return { data: data as DBClient }
+}
+
+export async function getClients(): Promise<Result<DBClient[]>> {
+  const uid = await getUserId()
+  if (uid.error) return { error: uid.error }
+
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('user_id', uid.data)
+    .order('created_at', { ascending: false })
+
+  if (error) return { error }
+  return { data: data as DBClient[] }
+}
+
+export async function updateClient(id: string, changes: Partial<Pick<DBClient, 'name' | 'platform' | 'account_id' | 'notes'>>): Promise<Result<DBClient>> {
+  const uid = await getUserId()
+  if (uid.error) return { error: uid.error }
+
+  const { data, error } = await supabase
+    .from('clients')
+    .update(changes)
+    .eq('id', id)
+    .eq('user_id', uid.data)
+    .select()
+    .single()
+
+  if (error) return { error }
+  return { data: data as DBClient }
+}
+
+export async function deleteClient(id: string): Promise<Result<DBClient>> {
+  const uid = await getUserId()
+  if (uid.error) return { error: uid.error }
+
+  const { data, error } = await supabase
+    .from('clients')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', uid.data)
+    .select()
+    .single()
+
+  if (error) return { error }
+  return { data: data as DBClient }
+}
