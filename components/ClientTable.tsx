@@ -9,6 +9,7 @@ export type ClientRow = {
   riskStatus?: string | null
   lastChecked?: string | null
   latestAlert?: string | null
+  followers?: number | null
 }
 
 type Props = {
@@ -52,7 +53,12 @@ export default function ClientTable({ clients, loading = false }: Props) {
           <tbody>
             {clients.map(c => (
               <tr key={c.id} className="border-t border-zinc-800">
-                <td className="py-3">{c.name}</td>
+                <td className="py-3 flex items-center gap-3">
+                  <div className="text-sm text-zinc-400">{c.name}</div>
+                  {typeof c.followers === 'number' && (
+                    <div className="text-xs text-zinc-500">{c.followers.toLocaleString()} followers</div>
+                  )}
+                </td>
                 <td className="py-3">{c.platform}</td>
                 <td className="py-3">{c.riskStatus ?? '—'}</td>
                 <td className="py-3">{c.lastChecked ? new Date(c.lastChecked).toLocaleString() : '—'}</td>

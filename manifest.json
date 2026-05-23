@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Banshi Collector",
+  "version": "1.0",
+  "description": "Collects visible Instagram profile snapshots and posts them to /api/events.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.instagram.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service_worker.js"
+  },
+  "action": {
+    "default_title": "Banshi Collector",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.instagram.com/*"],
+      "js": ["content_scripts/profile_collector.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

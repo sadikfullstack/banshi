@@ -13,6 +13,7 @@ export interface Client {
   metadata?: Record<string, unknown> | null;
   created_at: Timestamp;
   updated_at: Timestamp;
+  last_checked?: Timestamp | null;
 }
 
 export interface RiskStatus {

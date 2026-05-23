@@ -7,6 +7,7 @@ import supabase from '../../lib/supabase'
 import { signOut } from '../../lib/auth'
 import AddClientModal from '../../components/AddClientModal'
 import { createClient, getClients } from '../../lib/clients'
+import { getLatestEventsForClients } from '../../lib/events'
 import ClientTable, { ClientRow } from '../../components/ClientTable'
 import { getRecentAlerts } from '../../lib/alerts'
 import AlertFeed from '../../components/AlertFeed'
@@ -46,9 +47,16 @@ export default function DashboardPage() {
       // clients
       const clientsRes = await getClients()
       if (mounted && clientsRes.data) {
-        const rows = clientsRes.data.map(c => ({ id: c.id, name: c.name, platform: c.platform ?? 'Meta', riskStatus: null, lastChecked: c.updated_at ?? c.created_at, latestAlert: null }))
+      const rows = clientsRes.data.map(c => ({ id: c.id, name: c.name, platform: c.platform ?? 'Meta', riskStatus: null, lastChecked: c.last_checked ?? c.updated_at ?? c.created_at, latestAlert: null, followers: null }))
         setClientRows(rows)
         setAccounts(rows.length)
+
+        // fetch latest events for client live stats
+        const clientIds = clientsRes.data.map(c => c.id)
+        getLatestEventsForClients(clientIds).then(map => {
+          if (!mounted) return
+          setClientRows(prev => prev.map(r => ({ ...r, followers: map[r.id] && map[r.id].metadata ? map[r.id].metadata.followers : null })))
+        })
       }
 
       // recent alerts

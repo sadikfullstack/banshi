@@ -2,6 +2,7 @@ import supabase from './supabase'
 import type { Client as DBClient } from '../types/client'
 
 type Result<T> = { data?: T; error?: Error }
+type CreateResult<T> = Result<T> & { existed?: boolean }
 
 export type NewClientPayload = {
   client_name: string
@@ -18,7 +19,7 @@ async function getUserId(): Promise<Result<string>> {
   return { data: user.id }
 }
 
-export async function createClient(payload: NewClientPayload): Promise<Result<DBClient>> {
+export async function createClient(payload: NewClientPayload): Promise<CreateResult<DBClient>> {
   const uid = await getUserId()
   if (uid.error) return { error: uid.error }
 
@@ -29,6 +30,17 @@ export async function createClient(payload: NewClientPayload): Promise<Result<DB
     account_id: payload.account_id,
     notes: payload.notes ?? null,
   }
+
+  // Prevent duplicates: if a client already exists for this user/platform/account, return it
+  const { data: existing, error: exErr } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('user_id', uid.data)
+    .eq('platform', payload.platform)
+    .eq('account_id', payload.account_id)
+    .maybeSingle()
+  if (exErr) return { error: exErr }
+  if (existing) return { data: existing as DBClient, existed: true }
 
   const { data, error } = await supabase.from('clients').insert(insert).select().single()
   if (error) return { error }
