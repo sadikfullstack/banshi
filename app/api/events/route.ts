@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import supabase from '../../../lib/supabase'
 import { updateRiskStatusForClient } from '../../../lib/updateRiskStatus'
+import { computeRiskScoreFromSnapshot } from '../../../lib/riskEngine'
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -133,11 +134,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Failed to insert event' }, { status: 500, headers: CORS_HEADERS })
     }
 
-    // At this point the event was inserted successfully. We intentionally do not create
-    // a generic alert for every snapshot to keep the alerts table clean; alerts should
-    // be created only when meaningful rules or thresholds are hit.
-    // Return the inserted event to the caller so the extension can show status.
-    return NextResponse.json({ success: true, event: evData }, { status: 201, headers: CORS_HEADERS })
+    // Update risk status: compute derived features and numeric score (best-effort)
+    try {
+      // fetch previous snapshot for deltas
+      let prevEvent: any = null
+      try {
+        const prevRes = await db.from('events')
+          .select('*')
+          .eq('client_id', event.client_id)
+          .neq('id', evData.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (prevRes && prevRes.data) prevEvent = prevRes.data
+      } catch (e) {
+        // ignore
+      }
+
+      // fetch recent alerts for this client to include in scoring
+      let recentAlerts: any[] = []
+      try {
+        const ares = await db.from('alerts').select('*').eq('client_id', event.client_id).order('created_at', { ascending: false }).limit(50)
+        if (ares && ares.data) recentAlerts = ares.data
+      } catch (e) {
+        // ignore
+      }
+
+      const scoreRes = computeRiskScoreFromSnapshot({ currentEvent: evData, previousEvent: prevEvent, alerts: recentAlerts })
+      try {
+        await db.from('risk_status').upsert({ client_id: event.client_id, status: scoreRes.level, score: scoreRes.score, notes: scoreRes.reason }, { onConflict: 'client_id' })
+      } catch (e) {
+        console.warn('failed to upsert risk_status', e)
+      }
+
+      // Return inserted event and derived risk summary
+      return NextResponse.json({ success: true, event: evData, risk: { score: scoreRes.score, level: scoreRes.level, reason: scoreRes.reason } }, { status: 201, headers: CORS_HEADERS })
+    } catch (e) {
+      console.warn('risk scoring failed', e)
+      return NextResponse.json({ success: true, event: evData }, { status: 201, headers: CORS_HEADERS })
+    }
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('insert exception', e)

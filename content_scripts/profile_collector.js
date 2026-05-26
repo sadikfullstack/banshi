@@ -108,17 +108,101 @@
     });
   }
 
+  async function collectRecentPostEngagements(maxPosts = 5, perPostTimeout = 2000) {
+    try {
+      const anchors = Array.from(document.querySelectorAll('article a[href*="/p/"] , a[href*="/p/"]'))
+      const hrefs = []
+      for (const a of anchors) {
+        const href = a.href || a.getAttribute('href')
+        if (!href) continue
+        try {
+          const u = new URL(href, location.href)
+          if (u.pathname && u.pathname.startsWith('/p/')) {
+            const full = u.origin + u.pathname
+            if (!hrefs.includes(full)) hrefs.push(full)
+          }
+        } catch (e) {
+          continue
+        }
+        if (hrefs.length >= maxPosts) break
+      }
+
+      const posts = []
+      for (const url of hrefs.slice(0, maxPosts)) {
+        try {
+          const controller = new AbortController()
+          const id = setTimeout(() => controller.abort(), perPostTimeout)
+          const res = await fetch(url, { signal: controller.signal })
+          clearTimeout(id)
+          if (!res.ok) continue
+          const text = await res.text()
+          let likes = null
+          let comments = null
+          const likeMatch = text.match(/"edge_media_preview_like":\s*\{\s*"count"\s*:\s*([0-9]+)/i)
+          if (likeMatch) likes = Number(likeMatch[1])
+          const commentMatch = text.match(/"edge_media_to_parent_comment":\s*\{\s*"count"\s*:\s*([0-9]+)/i)
+          if (commentMatch) comments = Number(commentMatch[1])
+
+          if ((likes === null || comments === null)) {
+            try {
+              const parser = new DOMParser()
+              const doc = parser.parseFromString(text, 'text/html')
+              const og = doc.querySelector('meta[property="og:description"]')
+              if (og && og.content) {
+                const mLikes = og.content.match(/([0-9,\.]+)\s+Likes/i)
+                if (mLikes) likes = Number(mLikes[1].replace(/[,.]/g, ''))
+                const mComments = og.content.match(/([0-9,\.]+)\s+Comments/i)
+                if (mComments) comments = Number(mComments[1].replace(/[,.]/g, ''))
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+
+          posts.push({ url, likes: (typeof likes === 'number') ? likes : null, comments: (typeof comments === 'number') ? comments : null })
+        } catch (e) {
+          // per-post failure ok
+          continue
+        }
+      }
+
+      if (posts.length === 0) return null
+      const sumLikes = posts.reduce((s, p) => s + (typeof p.likes === 'number' ? p.likes : 0), 0)
+      const countLikes = posts.reduce((c, p) => c + (typeof p.likes === 'number' ? 1 : 0), 0)
+      const avgLikes = countLikes > 0 ? Math.round(sumLikes / countLikes) : null
+      const sumComments = posts.reduce((s, p) => s + (typeof p.comments === 'number' ? p.comments : 0), 0)
+      const countComments = posts.reduce((c, p) => c + (typeof p.comments === 'number' ? 1 : 0), 0)
+      const avgComments = countComments > 0 ? Math.round(sumComments / countComments) : null
+
+      return { recent_posts: posts, avg_likes: avgLikes, avg_comments: avgComments }
+    } catch (e) {
+      return null
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || message.type !== 'COLLECT_PROFILE') return;
     (async () => {
       try {
         const initial = collectProfile();
-        if ((initial.handle && initial.handle.length > 0) || (typeof initial.followers === 'number' && initial.followers > 0)) {
-          sendResponse(initial);
-          return;
+        let result = initial;
+        if (!((initial.handle && initial.handle.length > 0) || (typeof initial.followers === 'number' && initial.followers > 0))) {
+          result = await waitForProfileData(5000, 300);
         }
-        const waited = await waitForProfileData(5000, 300);
-        sendResponse(waited);
+
+        // optionally collect engagement from recent posts when requested
+        if (message && message.include_engagement) {
+          try {
+            const eng = await collectRecentPostEngagements(5, 2000)
+            if (eng) {
+              result = Object.assign({}, result, eng)
+            }
+          } catch (e) {
+            // ignore engagement failures
+          }
+        }
+
+        sendResponse(result)
       } catch (e) {
         sendResponse(null);
       }

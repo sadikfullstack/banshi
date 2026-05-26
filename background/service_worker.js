@@ -138,8 +138,8 @@ async function performSnapshots() {
         let profileData = null;
         if (!handle) {
           // fallback: ask content script for handle and counts
-          try {
-            profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE' });
+            try {
+            profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE', include_engagement: true });
             if (profileData && profileData.handle) handle = profileData.handle.toLowerCase();
           } catch (e) {
             console.warn('performSnapshots: failed to collect handle from tab', tab.id, e);
@@ -148,7 +148,7 @@ async function performSnapshots() {
         } else {
           // we still need counts from the content script
           try {
-            profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE' });
+            profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE', include_engagement: true });
           } catch (e) {
             console.warn('performSnapshots: collect profile failed', e);
             continue;
@@ -248,7 +248,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     let profileData = null
     if (isIg) {
       try {
-        profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE' })
+        profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE', include_engagement: true })
       } catch (e) {
         console.warn('action.onClicked: collect failed', e)
       }
@@ -319,7 +319,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const isIg = /https?:\/\/(www\.)?instagram\.com\//i.test(tab.url)
       let profileData = null
       if (isIg) {
-        try { profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE' }) } catch (e) { console.warn('OPEN_LINK: collect failed', e) }
+        try { profileData = await sendMessageToTab(tab.id, { type: 'COLLECT_PROFILE', include_engagement: true }) } catch (e) { console.warn('OPEN_LINK: collect failed', e) }
       }
       const vals = await getStoredValues()
       const base = vals.api_base || DEFAULT_API_BASE
