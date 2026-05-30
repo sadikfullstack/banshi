@@ -1,16 +1,23 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import DashboardShell from '../../../components/DashboardShell'
 import TerminalIcon from '../../../components/TerminalIcon'
 import { setClientMonitoring } from '../../../lib/clients'
 
+function readUnlinkedParams() {
+  if (typeof window === 'undefined') return { clientId: null as string | null, handle: null as string | null, syncOnly: false }
+  const params = new URLSearchParams(window.location.search)
+  return {
+    clientId: params.get('client_id'),
+    handle: params.get('handle'),
+    syncOnly: params.get('sync_only') === '1',
+  }
+}
+
 export default function UnlinkedPage() {
-  const params = useSearchParams()
-  const clientId = params.get('client_id')
-  const handle = params.get('handle')
-  const syncOnly = params.get('sync_only') === '1'
+  const [linkParams, setLinkParams] = useState(readUnlinkedParams)
+  const { clientId, handle, syncOnly } = linkParams
   const [status, setStatus] = useState<'syncing' | 'ready' | 'error'>('syncing')
   const [closeBlocked, setCloseBlocked] = useState(false)
 
@@ -18,12 +25,15 @@ export default function UnlinkedPage() {
     let mounted = true
 
     async function syncMonitoring() {
-      if (syncOnly || !clientId) {
+      const nextParams = readUnlinkedParams()
+      setLinkParams(nextParams)
+
+      if (nextParams.syncOnly || !nextParams.clientId) {
         setStatus('ready')
         return
       }
 
-      const res = await setClientMonitoring(clientId, false)
+      const res = await setClientMonitoring(nextParams.clientId, false)
       if (!mounted) return
       setStatus(res.error ? 'error' : 'ready')
     }
@@ -32,7 +42,7 @@ export default function UnlinkedPage() {
     return () => {
       mounted = false
     }
-  }, [clientId, syncOnly])
+  }, [])
 
   function handleCloseTab() {
     setCloseBlocked(false)

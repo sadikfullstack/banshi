@@ -1,16 +1,23 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import DashboardShell from '../../../components/DashboardShell'
 import TerminalIcon from '../../../components/TerminalIcon'
 import { setClientMonitoring } from '../../../lib/clients'
 
+function readLinkedParams() {
+  if (typeof window === 'undefined') return { clientId: null as string | null, handle: null as string | null, existed: false }
+  const params = new URLSearchParams(window.location.search)
+  return {
+    clientId: params.get('client_id'),
+    handle: params.get('handle'),
+    existed: params.get('existed') === '1',
+  }
+}
+
 export default function LinkedPage() {
-  const params = useSearchParams()
-  const clientId = params.get('client_id')
-  const handle = params.get('handle')
-  const existed = params.get('existed') === '1'
+  const [linkParams, setLinkParams] = useState(readLinkedParams)
+  const { clientId, handle, existed } = linkParams
   const [status, setStatus] = useState<'syncing' | 'ready' | 'error'>('syncing')
   const [closeBlocked, setCloseBlocked] = useState(false)
 
@@ -18,12 +25,16 @@ export default function LinkedPage() {
     let mounted = true
 
     async function syncMonitoring() {
-      if (!clientId) {
+      const nextParams = readLinkedParams()
+      setLinkParams(nextParams)
+
+      const nextClientId = nextParams.clientId
+      if (!nextClientId) {
         setStatus('error')
         return
       }
 
-      const res = await setClientMonitoring(clientId, true)
+      const res = await setClientMonitoring(nextClientId, true)
       if (!mounted) return
       setStatus(res.error ? 'error' : 'ready')
     }
@@ -32,7 +43,7 @@ export default function LinkedPage() {
     return () => {
       mounted = false
     }
-  }, [clientId])
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

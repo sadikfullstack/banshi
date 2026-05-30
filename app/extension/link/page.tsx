@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import DashboardShell from '../../../components/DashboardShell'
 import TerminalIcon from '../../../components/TerminalIcon'
 import supabase from '../../../lib/supabase'
@@ -23,24 +22,35 @@ function formatFollowers(value: number) {
   return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
+function readLinkParams() {
+  if (typeof window === 'undefined') return { handle: '', followers: 0, bio: '' }
+  const params = new URLSearchParams(window.location.search)
+  return {
+    handle: normalizeHandle(params.get('handle') ?? ''),
+    followers: Number(params.get('followers') ?? 0),
+    bio: params.get('bio') ?? '',
+  }
+}
+
 export default function ExtensionLinkPage() {
-  const params = useSearchParams()
   const access = useAccessStatus()
+  const [linkParams, setLinkParams] = useState(readLinkParams)
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handle = useMemo(() => normalizeHandle(params.get('handle') ?? ''), [params])
+  const handle = linkParams.handle
   const validHandle = isValidProfileHandle(handle)
-  const followers = Number(params.get('followers') ?? 0)
-  const bio = params.get('bio') ?? ''
+  const followers = linkParams.followers
+  const bio = linkParams.bio
 
   useEffect(() => {
     let mounted = true
 
     async function init() {
       setLoading(true)
+      setLinkParams(readLinkParams())
       const { data } = await supabase.auth.getUser()
       if (!mounted) return
       setUser(data?.user ?? null)
